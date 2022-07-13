@@ -1,0 +1,54 @@
+select
+sid,
+account_age,
+(days_in_sync + days_oos) as snap_count,
+cast((days_oos / snap_count) * 100 as number(10,2)) as avg_time_oos,
+days_oos,
+days_in_sync
+
+from
+(select
+distinct(store_id) as sid,
+account_age,
+sum(in_sync) as days_in_sync,
+sum(out_of_sync) as days_oos
+
+
+from
+(select
+        to_date(ss.date_of_refesh) as date,
+        ss.id as store_id,
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 1
+            else 0
+        end as in_sync,
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 0
+            else 1
+        end as out_of_sync,
+        datediff('hour', ss.last_tx_date_time, ss.date_of_refesh) / 24 as age,
+        case
+            when age <= 3 then 'not oos'
+            when age > 3
+            and age <= 30 then '3 <> 30'
+            when age > 30
+            and age <= 90 then '30 <> 90'
+            when age > 90
+            and age <= 180 then '90 <> 180'
+            else '180+'
+        end as age_bucket,
+        datediff('day',date_of_first_transaction__c,getdate()) as account_age,
+        datediff('day','2021-09-29',getdate()) as earliest_snap
+        //datediff('day',first_loyalty_host_ping__c,getdate()) as days_since_engage_install
+        
+        
+        from "SHARED"."SNAPSHOTS"."STORES_TABLE_SNAPSHOT" ss
+            left join "PROD"."SALESFORCE"."ACCOUNT" a
+             on store_id = a.store_id__c
+        
+        
+        where lifecycle_stage__c = 'Implementation/Onboarding' and
+              date > date_of_first_transaction__c
+              
+)
+group by sid, account_age)

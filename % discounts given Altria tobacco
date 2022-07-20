@@ -1,0 +1,22 @@
+select 
+stores,
+eligible_with_discount,
+(eligible_with_discount / total_eligible) * 100 as Percent_Eligible_Taken,
+eligible_no_discount,
+(eligible_no_discount / total_eligible) * 100 as Percent_Eligbile_Missed,
+total_eligible
+
+from
+(Select 
+distinct(store_number) as stores,
+sum(case
+    when eligibility_flag = 'TRUE' and manufacturer_discount_three_amount > '0' then 1 else 0 end) as eligible_with_discount,
+sum(case
+    when eligibility_flag = 'TRUE' and manufacturer_discount_three_amount is null then 1 else 0 end) as eligible_no_discount,
+sum(case
+    when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible
+
+from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_LOYALTY_REPORT_DATA_TABLE"
+group by stores
+)
+where total_eligible != '0'

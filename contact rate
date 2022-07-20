@@ -1,0 +1,14 @@
+ SELECT   distinct(b.store_id) as store,
+          count(case when a.case_owner_role in ('FWF - OB','FWF - Tier 1','Tier 1','Tier 2','CSM') then 1 else 0 end) as case_count
+         
+
+
+from
+"ANALYTICS"."PRODUCTION"."DIM_CASES" a
+    left join "ANALYTICS"."PRODUCTION"."DIM_ACCOUNTS" b
+    on a.sfdc_account_id = b.sfdc_account_id
+where
+case_direction = 'Inbound'
+and month(a.created_at) = month(dateadd(day,-30,getdate())) and year(a.created_at) = year(getdate()) 
+GROUP BY  store
+      

@@ -1,0 +1,10 @@
+select 
+b.store_id__c as sid,
+avg(a.asknicely__score__c) as CSAT_AVG
+
+
+from "PROD"."SALESFORCE"."ASKNICELY__NPS__C" a
+    left join "PROD"."SALESFORCE"."ACCOUNT" b
+    on a.asknicely__account__c = b.id
+where asknicely__question_type__c = 'csat'
+group by sid

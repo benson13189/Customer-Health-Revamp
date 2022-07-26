@@ -1,0 +1,8 @@
+select 
+chain_id,
+sum(amount_in_dollars) as total_transferred,
+available_at,
+description
+from "ANALYTICS"."PRODUCTION"."FCT_STRIPE_TRANSFERS"
+group by chain_id,available_at,description
+order by chain_id desc

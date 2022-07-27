@@ -14,6 +14,7 @@ SELECT
       WHEN 8 THEN 'submission_pending'
     Else 'NA'
     END as report_status,
+    report_status as "Report Status",
     case report_status.status
       WHEN 0 THEN 'Validated'
       WHEN 1 THEN 'Resync'
@@ -21,7 +22,8 @@ SELECT
       WHEN 3 THEN 'Invalid'
       ELSE 'n/a'
     END as data_status,
-    sfdc_account.customer_health_score__c
+    case when sfdc_account.customer_health_score__c is not null then sfdc_account.CUSTOMER_HEALTH_SCORE__C 
+         when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO"
   FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
   Join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report
   ON webapi_report.request_id = report_status.request_id
@@ -30,4 +32,5 @@ SELECT
   and webapi_report.report_type IN (0)
   join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
   on sid = sfdc_account.store_id__c
+  where day(reporting_period) >= day(dateadd('day',-30,getdate()))
   order by reporting_period desc

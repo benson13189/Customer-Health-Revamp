@@ -1,15 +1,18 @@
 select
 sid,
-account_age,
+current_cho as "Current CHO",
+--account_age,
+--date,
 (days_in_sync + days_oos) as snap_count,
 cast((days_oos / snap_count) * 100 as number(10,2)) as avg_time_oos,
-days_oos,
+days_oos as "Days OOS",
 days_in_sync
 
 from
 (select
 distinct(store_id) as sid,
-account_age,
+current_cho,
+--account_age,
 sum(in_sync) as days_in_sync,
 sum(out_of_sync) as days_oos
 
@@ -38,7 +41,9 @@ from
             else '180+'
         end as age_bucket,
         datediff('day',date_of_first_transaction__c,getdate()) as account_age,
-        datediff('day','2021-09-29',getdate()) as earliest_snap
+        datediff('day','2021-09-29',getdate()) as earliest_snap,
+        case when a.customer_health_score__c is not null then a.CUSTOMER_HEALTH_SCORE__C 
+             when a.customer_health_score__c is null then 'No Current CHO' end as current_cho
         //datediff('day',first_loyalty_host_ping__c,getdate()) as days_since_engage_install
         
         
@@ -48,7 +53,10 @@ from
         
         
         where lifecycle_stage__c = 'Implementation/Onboarding' and
-              date > date_of_first_transaction__c
+              date > date_of_first_transaction__c and
+              day(date) >= day(dateadd('day',-30,getdate())) AND
+              isparent__c = 'FALSE'
+              
               
 )
-group by sid, account_age)
+group by sid,current_cho,account_age)

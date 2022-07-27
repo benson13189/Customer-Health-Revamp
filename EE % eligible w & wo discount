@@ -17,6 +17,8 @@ sum(case
     when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible
 
 from "PROD"."RETAILER_PERFORMANCE"."ENGAGE_PROGRAM_ELIGIBILITY_RESULTS"
+where
+day(timestamp) >= day(dateadd('day',-30,getdate()))
 group by stores
 )
 where total_eligible != '0'

@@ -1,0 +1,40 @@
+SELECT 
+  report_status.store_id,
+  report_status.STORE_CHAIN_ID,
+  accounts.ACCOUNT_NUMBER,
+  report_status.report_account_id,
+  report_status.PERIOD_END_AT AS Reporting_Period,
+    case webapi_report.status
+      WHEN 0 THEN 'not_ready'
+      WHEN 1 THEN 'ready_to_submit'
+      WHEN 2 THEN 'generation_pending'
+      WHEN 3 THEN 'submitted'
+      WHEN 4 THEN 'generation_failed'
+      WHEN 5 THEN 'submission_failed'
+      WHEN 6 THEN 'regenerate'
+      WHEN 7 THEN 'force_submitted'
+      WHEN 8 THEN 'submission_pending'
+    Else 'NA'
+    END as report_status,
+    case report_status.status
+      WHEN 0 THEN 'Validated'
+      WHEN 1 THEN 'Resync'
+      WHEN 2 THEN 'Refetch'
+      WHEN 3 THEN 'Invalid'
+      ELSE 'n/a'
+    END as data_status,
+    CASE
+      WHEN report_status.pos_type_id = 1 then 'Verifone'
+      WHEN report_status.pos_type_id = 2 then 'Gilbarco'
+      WHEN report_status.pos_type_id = 3 then 'Clover'
+      WHEN report_status.pos_type_id = 4 then 'NCR'
+      ELSE NULL
+    END AS pos,
+    webapi_report.submitted_at as submitted_on
+  FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
+  Join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report
+  ON webapi_report.request_id = report_status.request_id
+   join "PC_STITCH_DB"."STITCH_R1000"."REPORT_ACCOUNTS" as accounts
+  ON report_status.report_account_id = accounts.id
+  and webapi_report.report_type IN (0)
+  order by reporting_period desc

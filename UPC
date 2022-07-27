@@ -1,0 +1,6 @@
+select 
+distinct store_id as sid
+from "PROD"."TLOG_RAW"."PARTITIONED_ITEMS"
+where item_type = 'plu'
+and length(upc) = '12'
+and upc_entry = 'scanned'

@@ -52,11 +52,11 @@ from
              on store_id = a.store_id__c
         
         
-        where lifecycle_stage__c = 'Implementation/Onboarding' and
+        where 
+              a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' and	
               date > date_of_first_transaction__c and
               day(date) >= day(dateadd('day',-30,getdate())) AND
               isparent__c = 'FALSE'
-              
               
 )
 group by sid,current_cho,account_age)

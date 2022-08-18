@@ -1,10 +1,17 @@
 SELECT 
-  
-  distinct(report_status.STORE_CHAIN_ID) as SID,
-  report_status.PERIOD_END_AT AS Reporting_Period,
+  report_status.report_account_id as "Report ID",
+  report_status.STORE_CHAIN_ID as "Chain ID",
+  report_status.store_id as "Store ID",
+  cast(report_status.PERIOD_END_AT as date) AS "Week-Ending Date",
+    case webapi_report.report_type
+      WHEN 0 THEN 'Altria'
+      WHEN 4 THEN 'RJR'
+      WHEN 1 THEN '???'
+    Else 'NA'
+    END AS "Report Type",
     case webapi_report.status
-      WHEN 0 THEN 'not_ready'
-      WHEN 1 THEN 'ready_to_submit'
+      WHEN 0 THEN 'not_ready' --store either has no data or data is incomplete
+      WHEN 1 THEN 'ready_to_submit' --
       WHEN 2 THEN 'generation_pending'
       WHEN 3 THEN 'submitted'
       WHEN 4 THEN 'generation_failed'
@@ -13,15 +20,14 @@ SELECT
       WHEN 7 THEN 'force_submitted'
       WHEN 8 THEN 'submission_pending'
     Else 'NA'
-    END as report_status,
-    report_status as "Report Status",
+    END as "Report Status",
     case report_status.status
       WHEN 0 THEN 'Validated'
       WHEN 1 THEN 'Resync'
       WHEN 2 THEN 'Refetch'
       WHEN 3 THEN 'Invalid'
       ELSE 'n/a'
-    END as data_status,
+    END as "Store Status",
     case when sfdc_account.customer_health_score__c is not null then sfdc_account.CUSTOMER_HEALTH_SCORE__C 
          when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO"
   FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
@@ -29,8 +35,8 @@ SELECT
   ON webapi_report.request_id = report_status.request_id
    join "PC_STITCH_DB"."STITCH_R1000"."REPORT_ACCOUNTS" as accounts
   ON report_status.report_account_id = accounts.id
-  and webapi_report.report_type IN (0)
+  and webapi_report.report_type IN (0,4)
   join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
-  on sid = sfdc_account.store_id__c
-  where day(reporting_period) >= day(dateadd('day',-30,getdate()))
-  order by reporting_period desc
+  on "Store ID" = sfdc_account.store_id__c
+  where day("Week-Ending Date") >= day(dateadd('day',-30,getdate()))
+  order by "Week-Ending Date" desc

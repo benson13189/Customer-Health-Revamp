@@ -1,0 +1,69 @@
+select
+"Store ID",
+"Days in Sync",
+"Days OOS",
+"Avg % OOS",
+case
+    when "Days OOS" = '0' then 5
+    when "Days OOS" between '1' and '2' then 4
+    when "Days OOS" between '3' and '4' then 3
+    when "Days OOS" between '5' and '6' then 2
+    when "Days OOS" between '7' and '8' then 1
+    else 0 end as "New CHO"
+
+
+from
+(select
+distinct(store_id) as "Store ID",
+sum(in_sync) as "Days in Sync",
+sum(out_of_sync) as "Days OOS",
+cast(avg(avg_time_oos) as number(10,2)) as "Avg % OOS"
+
+
+
+
+from
+(select
+        to_date(ss.date_of_refesh) as date_of_update,
+        ss.id as store_id,
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 1
+            else 0
+        end as in_sync,
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 0
+            else 1
+        end as out_of_sync,
+        in_sync + out_of_sync as snap_count,
+        (out_of_sync / snap_count) * 100 as avg_time_oos,
+        datediff('hour', ss.last_tx_date_time, ss.date_of_refesh) / 24 as age,
+        case
+            when age <= 3 then 'not oos'
+            when age > 3
+            and age <= 30 then '3 <> 30'
+            when age > 30
+            and age <= 90 then '30 <> 90'
+            when age > 90
+            and age <= 180 then '90 <> 180'
+            else '180+'
+        end as age_bucket,
+        datediff('day',date_of_first_transaction__c,getdate()) as account_age,
+        datediff('day','2021-09-29',getdate()) as earliest_snap,
+        case when a.customer_health_score__c is not null then a.CUSTOMER_HEALTH_SCORE__C 
+             when a.customer_health_score__c is null then 'No Current CHO' end as current_cho
+        //datediff('day',first_loyalty_host_ping__c,getdate()) as days_since_engage_install
+        
+        
+        from "SHARED"."SNAPSHOTS"."STORES_TABLE_SNAPSHOT" ss
+            left join "PROD"."SALESFORCE"."ACCOUNT" a
+             on store_id = a.store_id__c
+        
+        
+        where 
+              a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' and	
+              date_of_update > date_of_first_transaction__c and
+              date(date_of_update) >= date(dateadd('day',-30,getdate())) AND
+              isparent__c = 'FALSE'
+              
+)
+group by "Store ID")

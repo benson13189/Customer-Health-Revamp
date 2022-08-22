@@ -4,8 +4,8 @@ SELECT
   report_status.store_id as "Store ID",
   cast(report_status.PERIOD_END_AT as date) AS "Week-Ending Date",
     case webapi_report.report_type
-      WHEN 0 THEN 'Altria'
-      WHEN 4 THEN 'RJR'
+      WHEN 0 THEN 'IRI'
+      WHEN 4 THEN 'MSA'
       WHEN 1 THEN '???'
     Else 'NA'
     END AS "Report Type",

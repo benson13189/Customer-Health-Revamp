@@ -1,11 +1,15 @@
 select 
 stores,
-eligible_with_discount,
-(eligible_with_discount / total_eligible) * 100 as Percent_Eligible_Taken,
-eligible_no_discount,
-(eligible_no_discount / total_eligible) * 100 as Percent_Eligbile_Missed,
-total_eligible
-
+total_eligible as "Total Eligible Transactions",
+eligible_with_discount as "Count Eligible with Discount",
+(eligible_with_discount / total_eligible) * 100 as "Percent Eligible with Discount",
+eligible_no_discount as "Count Eligible no Discount",
+(eligible_no_discount / total_eligible) * 100 as "Percent Eligible no Discount",
+case
+    when "Percent Eligible with Discount" between '90' and '100' then 3
+    when "Percent Eligible with Discount" between '80' and '89' then 2
+    when "Percent Eligible with Discount" between '70' and '79' then 1
+    Else 0 end as "New CHO"
 from
 (Select 
 distinct(store_id) as stores,
@@ -22,3 +26,4 @@ day(timestamp) >= day(dateadd('day',-30,getdate()))
 group by stores
 )
 where total_eligible != '0'
+order by "Percent Eligible with Discount" desc

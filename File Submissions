@@ -13,7 +13,7 @@ SELECT
       WHEN 0 THEN 'not_ready' --store either has no data or data is incomplete
       WHEN 1 THEN 'ready_to_submit' --
       WHEN 2 THEN 'generation_pending'
-      WHEN 3 THEN 'submitted'
+      WHEN 3 THEN 'submitted' --
       WHEN 4 THEN 'generation_failed'
       WHEN 5 THEN 'submission_failed'
       WHEN 6 THEN 'regenerate'
@@ -38,5 +38,9 @@ SELECT
   and webapi_report.report_type IN (0,4)
   join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
   on "Store ID" = sfdc_account.store_id__c
+  join "PROD"."APPDB"."STORES" as tsd_status
+  on "Store ID" = tsd_status.id
   where day("Week-Ending Date") >= day(dateadd('day',-30,getdate()))
+  and bitand(tsd_status.bit_flag,8192)=8192 --TSD is Active
+  and tsd_status.last_tx_date_time is not null
   order by "Week-Ending Date" desc

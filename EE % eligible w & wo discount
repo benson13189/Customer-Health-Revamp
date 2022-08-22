@@ -1,15 +1,29 @@
+--select
+
+--distinct("Discounts Given Percentile") as Percentile,
+--count("Discounts Given Percentile") as Percentile_count
+
+--from
+--(
 select 
 stores,
 total_eligible as "Total Eligible Transactions",
 eligible_with_discount as "Count Eligible with Discount",
-(eligible_with_discount / total_eligible) * 100 as "Percent Eligible with Discount",
+cast((eligible_with_discount / total_eligible) * 100 as number (10,0)) as "Percent Eligible with Discount",
 eligible_no_discount as "Count Eligible no Discount",
 (eligible_no_discount / total_eligible) * 100 as "Percent Eligible no Discount",
+--CUSTOMER_HEALTH_SCORE__C as "Current CHO",
 case
-    when "Percent Eligible with Discount" between '90' and '100' then 3
-    when "Percent Eligible with Discount" between '80' and '89' then 2
-    when "Percent Eligible with Discount" between '70' and '79' then 1
-    Else 0 end as "New CHO"
+    when "Percent Eligible with Discount" between '90' and '100' then '90'
+    when "Percent Eligible with Discount" between '80' and '89' then '80'
+    when "Percent Eligible with Discount" between '70' and '79' then '70'
+    when "Percent Eligible with Discount" between '60' and '69' then '60'
+    when "Percent Eligible with Discount" between '50' and '59' then '50'
+    when "Percent Eligible with Discount" between '40' and '49' then '40'
+    when "Percent Eligible with Discount" between '30' and '39' then '30'
+    when "Percent Eligible with Discount" between '20' and '29' then '20'
+    when "Percent Eligible with Discount" between '10' and '19' then '10'
+    Else 0 end as "Discounts Given Percentile"
 from
 (Select 
 distinct(store_id) as stores,
@@ -21,9 +35,16 @@ sum(case
     when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible
 
 from "PROD"."RETAILER_PERFORMANCE"."ENGAGE_PROGRAM_ELIGIBILITY_RESULTS"
+    join "PROD"."SALESFORCE"."ACCOUNT" 
+        on store_id = store_id__c
+
 where
 day(timestamp) >= day(dateadd('day',-30,getdate()))
 group by stores
 )
 where total_eligible != '0'
-order by "Percent Eligible with Discount" desc
+
+order by "Percent Eligible with Discount" asc
+--)
+--group by Percentile
+--order by Percentile desc

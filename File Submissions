@@ -2,6 +2,8 @@ SELECT
   report_status.report_account_id as "Report ID",
   report_status.STORE_CHAIN_ID as "Chain ID",
   report_status.store_id as "Store ID",
+  case when bitand(tsd_status.bit_flag,8192)=8192 and tsd_status.last_tx_date_time is not null then 'TSD Active'
+       else 'TSD Inactive' end as "TSD Status",
   cast(report_status.PERIOD_END_AT as date) AS "Week-Ending Date",
     case webapi_report.report_type
       WHEN 0 THEN 'IRI'
@@ -10,15 +12,15 @@ SELECT
     Else 'NA'
     END AS "Report Type",
     case webapi_report.status
-      WHEN 0 THEN 'not_ready' --store either has no data or data is incomplete
-      WHEN 1 THEN 'ready_to_submit' --
-      WHEN 2 THEN 'generation_pending'
-      WHEN 3 THEN 'submitted' --
-      WHEN 4 THEN 'generation_failed'
-      WHEN 5 THEN 'submission_failed'
-      WHEN 6 THEN 'regenerate'
-      WHEN 7 THEN 'force_submitted'
-      WHEN 8 THEN 'submission_pending'
+      WHEN 0 THEN 'not_ready' --store either has no data or data is incomplete--0
+      WHEN 1 THEN 'ready_to_submit' --0
+      WHEN 2 THEN 'generation_pending' --0
+      WHEN 3 THEN 'submitted' --3 
+      WHEN 4 THEN 'generation_failed' --0
+      WHEN 5 THEN 'submission_failed' --0
+      WHEN 6 THEN 'regenerate' --0
+      WHEN 7 THEN 'force_submitted' --3
+      WHEN 8 THEN 'submission_pending' --0
     Else 'NA'
     END as "Report Status",
     case report_status.status
@@ -28,8 +30,12 @@ SELECT
       WHEN 3 THEN 'Invalid'
       ELSE 'n/a'
     END as "Store Status",
-    case when sfdc_account.customer_health_score__c is not null then sfdc_account.CUSTOMER_HEALTH_SCORE__C 
-         when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO"
+ case when sfdc_account.customer_health_score__c is not null then sfdc_account.CUSTOMER_HEALTH_SCORE__C 
+      when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO",
+ case when "Report Status" = 'force_submitted' then 3
+      when "Report Status" = 'submitted' then 3
+      else 0 end as "New CHO"
+     
   FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
   Join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report
   ON webapi_report.request_id = report_status.request_id
@@ -40,7 +46,8 @@ SELECT
   on "Store ID" = sfdc_account.store_id__c
   join "PROD"."APPDB"."STORES" as tsd_status
   on "Store ID" = tsd_status.id
-  where day("Week-Ending Date") >= day(dateadd('day',-30,getdate()))
-  and bitand(tsd_status.bit_flag,8192)=8192 --TSD is Active
+  where 
+  bitand(tsd_status.bit_flag,8192)=8192 --TSD is Active
   and tsd_status.last_tx_date_time is not null
-  order by "Week-Ending Date" desc
+  and "Week-Ending Date" between (dateadd('day',-34,getdate())) and (dateadd('day',-7,getdate())) --exclude week prior from current week, ensure 4 weeks of IRI & MSA files for each store
+  order by "Week-Ending Date" asc

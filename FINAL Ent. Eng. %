@@ -51,7 +51,7 @@ from "PROD"."RETAILER_PERFORMANCE"."ENGAGE_PROGRAM_ELIGIBILITY_RESULTS"
     join "PROD"."APPDB"."STORES" as engage_status
         on stores = engage_status.id
 where
-timestamp between (dateadd('day',-34,getdate())) and (dateadd('day',-7,getdate())) and --what timeframe do we want for EE tx's?
+timestamp >= dateadd('day',-30,getdate()) and --what timeframe do we want for EE tx's?
 bitand(engage_status.bit_flag,1024)=1024 and
 engage_status.last_tx_date_time is not null
 group by stores,customer_health_score__c,bit_flag,engage_status.engage_purchased_at

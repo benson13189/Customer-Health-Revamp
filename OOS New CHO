@@ -3,6 +3,7 @@ select
 "Days in Sync",
 "Days OOS",
 "Avg % OOS",
+"Current CHO",
 case
     when "Days OOS" = '0' then 5
     when "Days OOS" between '1' and '2' then 4
@@ -17,7 +18,8 @@ from
 distinct(store_id) as "Store ID",
 sum(in_sync) as "Days in Sync",
 sum(out_of_sync) as "Days OOS",
-cast(avg(avg_time_oos) as number(10,2)) as "Avg % OOS"
+cast(avg(avg_time_oos) as number(10,2)) as "Avg % OOS",
+current_cho as "Current CHO"
 
 
 
@@ -62,8 +64,8 @@ from
         where 
               a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' and	
               date_of_update > date_of_first_transaction__c and
-              date(date_of_update) >= date(dateadd('day',-30,getdate())) AND
+              date_of_update >= dateadd('day',-30,getdate()) AND
               isparent__c = 'FALSE'
               
 )
-group by "Store ID")
+group by "Store ID","Current CHO")

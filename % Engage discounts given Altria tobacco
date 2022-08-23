@@ -1,14 +1,19 @@
+select
 stores,
 total_eligible as "Total Eligible Transactions",
 eligible_with_discount as "Count Eligible with Discount",
-(eligible_with_discount / total_eligible) * 100 as "Percent Eligible with Discount",
-eligible_no_discount as "Count Eligible no Discount",
-(eligible_no_discount / total_eligible) * 100 as "Percent Eligible no Discount",
 case
-    when "Percent Eligible with Discount" between '90' and '100' then 3
-    when "Percent Eligible with Discount" between '80' and '89' then 2
-    when "Percent Eligible with Discount" between '70' and '79' then 1
-    Else 0 end as "New CHO"
+    when "Total Eligible Transactions" > '0' then cast((eligible_with_discount / total_eligible) * 100 as number (10,0))
+    when "Total Eligible Transactions" = '0' then 0
+    end as "Percent Eligible with Discount",
+customer_health_score as "Current CHO",
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" >= '50' then 3
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '35' and '49' then 2
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '15' and '34' then 1
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" <= '14' then 0
+    when bitand(bit_flag,1024)<>1024 then 0
+    end as "New CHO"
 
 from
 (Select 
@@ -18,10 +23,18 @@ sum(case
 sum(case
     when eligibility_flag = 'TRUE' and manufacturer_discount_three_amount is null then 1 else 0 end) as eligible_no_discount,
 sum(case
-    when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible
+    when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible,
+sfdc_account.customer_health_score__c as customer_health_score,
+engage_status.bit_flag as bit_flag
 
 from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_LOYALTY_REPORT_DATA_TABLE"
-group by stores
+    join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+        on store_number = sfdc_account.store_id__c
+    join "PROD"."APPDB"."STORES" as engage_status
+        on store_number = engage_status.id
+where --what timeframe do we want for tobacco loyalty??
+      bitand(engage_status.bit_flag,1024)=1024 and
+      engage_status.last_tx_date_time is not null
+group by stores,customer_health_score,engage_status.bit_flag
 )
-where total_eligible != '0'
 order by "Percent Eligible with Discount" desc

@@ -1,0 +1,263 @@
+With T1 as
+(select
+"Store ID",
+"Days in Sync",
+"Days OOS",
+"Avg % OOS",
+"Current CHO",
+case
+    when "Days OOS" = '0' then 5
+    when "Days OOS" between '1' and '2' then 4
+    when "Days OOS" between '3' and '4' then 3
+    when "Days OOS" between '5' and '6' then 2
+    when "Days OOS" between '7' and '8' then 1
+    else 0 end as "New CHO"
+
+
+from
+(select
+distinct(store_id) as "Store ID",
+sum(in_sync) as "Days in Sync",
+sum(out_of_sync) as "Days OOS",
+cast(avg(avg_time_oos) as number(10,2)) as "Avg % OOS",
+current_cho as "Current CHO"
+
+
+
+
+from
+(select
+        to_date(ss.date_of_refesh) as date_of_update,
+        ss.id as store_id,
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 1
+            else 0
+        end as in_sync,
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 0
+            else 1
+        end as out_of_sync,
+        in_sync + out_of_sync as snap_count,
+        (out_of_sync / snap_count) * 100 as avg_time_oos,
+        datediff('hour', ss.last_tx_date_time, ss.date_of_refesh) / 24 as age,
+        case
+            when age <= 3 then 'not oos'
+            when age > 3
+            and age <= 30 then '3 <> 30'
+            when age > 30
+            and age <= 90 then '30 <> 90'
+            when age > 90
+            and age <= 180 then '90 <> 180'
+            else '180+'
+        end as age_bucket,
+        datediff('day',date_of_first_transaction__c,getdate()) as account_age,
+        datediff('day','2021-09-29',getdate()) as earliest_snap,
+        case when a.customer_health_score__c is not null then a.CUSTOMER_HEALTH_SCORE__C 
+             when a.customer_health_score__c is null then 'No Current CHO' end as current_cho
+        //datediff('day',first_loyalty_host_ping__c,getdate()) as days_since_engage_install
+        
+        
+        from "SHARED"."SNAPSHOTS"."STORES_TABLE_SNAPSHOT" ss
+            left join "PROD"."SALESFORCE"."ACCOUNT" a
+             on store_id = a.store_id__c
+        
+        
+        where 
+              a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' and	
+              date_of_update > date_of_first_transaction__c and
+              date_of_update >= dateadd('day',-30,getdate()) AND
+              isparent__c = 'FALSE'
+              
+)
+group by "Store ID","Current CHO")),
+
+T2 as
+(Select
+    distinct("SID") as "Store ID",
+    "Chain ID",
+    "TSD Status",
+    cast(AVG(cho_calc) as number(10,0)) as "New CHO"
+    
+
+from
+(SELECT 
+  report_status.report_account_id as "Report ID",
+  report_status.STORE_CHAIN_ID as "Chain ID",
+  report_status.store_id as "SID",
+  case when bitand(tsd_status.bit_flag,8192)=8192 and tsd_status.last_tx_date_time is not null then 'TSD Active'
+       else 'TSD Inactive' end as "TSD Status",
+  cast(report_status.PERIOD_END_AT as date) AS "Week-Ending Date",
+    case webapi_report.report_type
+      WHEN 0 THEN 'IRI'
+      WHEN 4 THEN 'MSA'
+      WHEN 1 THEN '???'
+    Else 'NA'
+    END AS "Report Type",
+    case webapi_report.status
+      WHEN 0 THEN 'not_ready' --store either has no data or data is incomplete--0
+      WHEN 1 THEN 'ready_to_submit' --0
+      WHEN 2 THEN 'generation_pending' --0
+      WHEN 3 THEN 'submitted' --3 
+      WHEN 4 THEN 'generation_failed' --0
+      WHEN 5 THEN 'submission_failed' --0
+      WHEN 6 THEN 'regenerate' --0
+      WHEN 7 THEN 'force_submitted' --3
+      WHEN 8 THEN 'submission_pending' --0
+    Else 'NA'
+    END as "Report Status",
+    case report_status.status
+      WHEN 0 THEN 'Validated'
+      WHEN 1 THEN 'Resync'
+      WHEN 2 THEN 'Refetch'
+      WHEN 3 THEN 'Invalid'
+      ELSE 'n/a'
+    END as "Store Status",
+ case when sfdc_account.customer_health_score__c is not null then sfdc_account.CUSTOMER_HEALTH_SCORE__C 
+      when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO",
+ case when "Report Status" = 'force_submitted' then 3
+      when "Report Status" = 'submitted' then 3
+      else 0 end as cho_calc
+     
+  FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
+  Join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report
+  ON webapi_report.request_id = report_status.request_id
+   join "PC_STITCH_DB"."STITCH_R1000"."REPORT_ACCOUNTS" as accounts
+  ON report_status.report_account_id = accounts.id
+  and webapi_report.report_type IN (0,4)
+  join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+  on "SID" = sfdc_account.store_id__c
+  join "PROD"."APPDB"."STORES" as tsd_status
+  on "SID" = tsd_status.id
+  where 
+  bitand(tsd_status.bit_flag,8192)=8192 --TSD is Active
+  and tsd_status.last_tx_date_time is not null
+  and "Week-Ending Date" between (dateadd('day',-34,getdate())) and (dateadd('day',-7,getdate())))
+  group by
+    "Chain ID",
+    "Store ID",
+    "TSD Status"),
+
+T3 as 
+(select
+stores as "Store ID",
+total_eligible as "Total Eligible Transactions",
+eligible_with_discount as "Count Eligible with Discount",
+case
+    when "Total Eligible Transactions" > '0' then cast((eligible_with_discount / total_eligible) * 100 as number (10,0))
+    when "Total Eligible Transactions" = '0' then 0
+    end as "Percent Eligible with Discount",
+customer_health_score as "Current CHO",
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" >= '50' then 3
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '35' and '49' then 2
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '15' and '34' then 1
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" <= '14' then 0
+    when bitand(bit_flag,1024)<>1024 then 0
+    end as "New CHO",
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '90' and '100' then 90
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '80' and '89' then 80
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '70' and '79' then 70
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '60' and '69' then 60
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '50' and '59' then 50
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '40' and '49' then 40
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '30' and '39' then 30
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '20' and '29' then 20
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '10' and '19' then 10
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '0' and '9' then 0
+    end as "Discounts Given Percentile"
+from
+(Select 
+distinct(store_number) as stores,
+sum(case
+    when eligibility_flag = 'TRUE' and manufacturer_discount_three_amount > '0' then 1 else 0 end) as eligible_with_discount,
+sum(case
+    when eligibility_flag = 'TRUE' and manufacturer_discount_three_amount is null then 1 else 0 end) as eligible_no_discount,
+sum(case
+    when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible,
+sfdc_account.customer_health_score__c as customer_health_score,
+engage_status.bit_flag as bit_flag
+
+from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_LOYALTY_REPORT_DATA_TABLE"
+    join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+        on store_number = sfdc_account.store_id__c
+    join "PROD"."APPDB"."STORES" as engage_status
+        on store_number = engage_status.id
+where transaction_datetime >= dateadd('day',-30,getdate()) and
+      bitand(engage_status.bit_flag,1024)=1024 and
+      engage_status.last_tx_date_time is not null
+group by stores,customer_health_score,engage_status.bit_flag
+)),
+
+T4 as
+(select 
+stores as "Store ID",
+total_eligible as "Total Eligible Transactions",
+eligible_with_discount as "Count Eligible with Discount",
+case
+    when "Total Eligible Transactions" > '0' then cast((eligible_with_discount / total_eligible) * 100 as number (10,0))
+    when "Total Eligible Transactions" = '0' then 0
+    end as "Percent Eligible with Discount",
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '90' and '100' then 90
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '80' and '89' then 80
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '70' and '79' then 70
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '60' and '69' then 60
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '50' and '59' then 50
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '40' and '49' then 40
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '30' and '39' then 30
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '20' and '29' then 20
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '10' and '19' then 10
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '0' and '9' then 0
+    when bitand(bit_flag,1024)<>1024 then 0 
+    end as "Discounts Given Percentile",
+customer_health_score__c as "Current CHO",
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" >= '50' then 3
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '35' and '49' then 2
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '15' and '34' then 1
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" <= '14' then 0
+    when bitand(bit_flag,1024)<>1024 then 0 
+    end as "New CHO",
+bit_flag,
+engage_purchased_at
+
+from
+(Select 
+store_id as stores,
+sfdc_account.customer_health_score__c as customer_health_score__c,
+engage_status.engage_purchased_at as engage_purchased_at,
+sum(case
+    when eligibility_flag = 'TRUE' and units_sold_with_discount >= '1' then 1 else 0 end) as eligible_with_discount,
+sum(case
+    when eligibility_flag = 'TRUE' and units_sold_with_discount < '1' then 1 else 0 end) as eligible_no_discount,
+sum(case
+    when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible,
+engage_status.bit_flag
+
+from "PROD"."RETAILER_PERFORMANCE"."ENGAGE_PROGRAM_ELIGIBILITY_RESULTS"
+    join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+        on store_id = store_id__c
+    join "PROD"."APPDB"."STORES" as engage_status
+        on stores = engage_status.id
+where
+timestamp >= dateadd('day',-30,getdate()) and
+bitand(engage_status.bit_flag,1024)=1024 and
+engage_status.last_tx_date_time is not null
+group by stores,customer_health_score__c,bit_flag,engage_status.engage_purchased_at
+
+))
+
+select 
+distinct(t1."Store ID") as "SID",
+sum(T1."New CHO" + T2."New CHO" + T3."New CHO" + T4."New CHO") as "Total CHO"
+
+from T1
+    join T2
+        on T1."Store ID" = T2."Store ID"
+    join T3
+        on T1."Store ID" = T3."Store ID"
+    join T4
+        on T1."Store ID" = T4."Store ID"
+group by "SID"
+order by "Total CHO" desc

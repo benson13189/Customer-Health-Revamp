@@ -1,0 +1,19 @@
+select
+distinct(sfdc_account.store_id__c) as "Store ID",
+sfdc_account.cases_per_month__c as "Cases Per Month",
+sfdc_account.customer_health_score__c as "Current CHO",
+case
+    when "Cases Per Month" <= '1' then 3
+    when "Cases Per Month" = '2' then 2
+    when "Cases Per Month" = '3' then 1
+    when "Cases Per Month" >= '4' then 0
+    end as "New CHO"
+
+
+from
+"PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+    join "PROD"."SALESFORCE"."CASE" as sfdc_case
+        on sfdc_account.store_id__c = sfdc_case.store_id__c
+where "Current CHO" is not null
+
+      

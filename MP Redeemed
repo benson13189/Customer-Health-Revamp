@@ -1,9 +1,23 @@
 select 
 store_number,
-sum(case when multipack_indicator = 'Y' then 1 else 0 end) as MP_Redeemed,
-count(possible_multipack_quantities) as MP_eligible,
-cast((MP_Redeemed/MP_eligible) * 100 as decimal(10,2)) as Percent_Eligible_Redeemed
+sum(case when multipack_indicator = 'Y' then 1 else 0 end) as "MP Redeemed",
+count(possible_multipack_quantities) as "MP Eligible",
+cast(("MP Redeemed"/"MP Eligible") * 100 as decimal(10,2)) as "Percent MP Eligible Redeemed",
+sfdc_account.customer_health_score__c as "Current CHO",
+case
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" >= '50' then 3
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '35' and '49' then 2
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '15' and '34' then 1
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" <= '14' then 0
+    when bitand(tsd_status.bit_flag,8192)<>8192 then 0 
+    end as "New CHO",
+tsd_status.bit_flag 
 from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_DASHBOARD_REPORT_RAW_DATA"
+    join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+        on store_number = sfdc_account.store_id__c
+    join "PROD"."APPDB"."STORES" as tsd_status
+        on store_number = tsd_status.id
 where quantity_sold > '1' and
-possible_multipack_quantities is not null
-group by store_number
+possible_multipack_quantities is not null and
+tsd_status.last_tx_date_time is not null
+group by store_number,"Current CHO",tsd_status.bit_flag

@@ -55,7 +55,7 @@ from
         where 
               a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' and	
               date > date_of_first_transaction__c and
-              day(date) >= day(dateadd('day',-30,getdate())) AND
+              date >= dateadd('day',-30,getdate()) AND
               isparent__c = 'FALSE'
               
 )

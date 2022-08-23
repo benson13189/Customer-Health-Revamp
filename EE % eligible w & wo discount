@@ -1,18 +1,18 @@
---select
-
---distinct("Discounts Given Percentile") as Percentile,
---count("Discounts Given Percentile") as Percentile_count
-
---from
---(
 select 
 stores,
 total_eligible as "Total Eligible Transactions",
 eligible_with_discount as "Count Eligible with Discount",
-cast((eligible_with_discount / total_eligible) * 100 as number (10,0)) as "Percent Eligible with Discount",
-eligible_no_discount as "Count Eligible no Discount",
-(eligible_no_discount / total_eligible) * 100 as "Percent Eligible no Discount",
---CUSTOMER_HEALTH_SCORE__C as "Current CHO",
+customer_health_score__c as "Current CHO",
+case
+    when "Total Eligible Transactions" > '0' then cast((eligible_with_discount / total_eligible) * 100 as number (10,0))
+    when "Total Eligible Transactions" = '0' then 0
+    end as "Percent Eligible with Discount",
+case
+    when "Percent Eligible with Discount" >= '50' then 3
+    when "Percent Eligible with Discount" between '35' and '49' then 2
+    when "Percent Eligible with Discount" between '15' and '34' then 1
+    when "Percent Eligible with Discount" <= '14' then 0
+    end as "New CHO",
 case
     when "Percent Eligible with Discount" between '90' and '100' then '90'
     when "Percent Eligible with Discount" between '80' and '89' then '80'
@@ -23,28 +23,34 @@ case
     when "Percent Eligible with Discount" between '30' and '39' then '30'
     when "Percent Eligible with Discount" between '20' and '29' then '20'
     when "Percent Eligible with Discount" between '10' and '19' then '10'
-    Else 0 end as "Discounts Given Percentile"
+    Else 0 end as "Discounts Given Percentile",
+bit_flag,
+engage_purchased_at
+
+
 from
 (Select 
-distinct(store_id) as stores,
+store_id as stores,
+sfdc_account.customer_health_score__c as customer_health_score__c,
+engage_status.engage_purchased_at as engage_purchased_at,
 sum(case
     when eligibility_flag = 'TRUE' and units_sold_with_discount >= '1' then 1 else 0 end) as eligible_with_discount,
 sum(case
     when eligibility_flag = 'TRUE' and units_sold_with_discount < '1' then 1 else 0 end) as eligible_no_discount,
 sum(case
-    when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible
+    when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible,
+engage_status.bit_flag
 
 from "PROD"."RETAILER_PERFORMANCE"."ENGAGE_PROGRAM_ELIGIBILITY_RESULTS"
-    join "PROD"."SALESFORCE"."ACCOUNT" 
+    join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
         on store_id = store_id__c
-
+    join "PROD"."APPDB"."STORES" as engage_status
+        on stores = engage_status.id
 where
-day(timestamp) >= day(dateadd('day',-30,getdate()))
-group by stores
-)
-where total_eligible != '0'
+timestamp between (dateadd('day',-34,getdate())) and (dateadd('day',-7,getdate())) and --what timeframe do we want for EE tx's?
+bitand(engage_status.bit_flag,1024)=1024 and
+engage_status.last_tx_date_time is not null
+group by stores,customer_health_score__c,bit_flag,engage_status.engage_purchased_at
 
-order by "Percent Eligible with Discount" asc
---)
---group by Percentile
---order by Percentile desc
+)
+order by "New CHO" desc

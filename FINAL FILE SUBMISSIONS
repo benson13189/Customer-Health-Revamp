@@ -34,7 +34,17 @@ SELECT
       when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO",
  case when "Report Status" = 'force_submitted' then 3
       when "Report Status" = 'submitted' then 3
-      else 0 end as "New CHO"
+      when "Report Status" = 'not_ready' then 0
+      when "Report Status" = 'ready_to_submit' then 0
+      when "Report Status" = 'generation_pending' then 0
+      when "Report Status" = 'sumbission_failed' then 0
+      when "Report Status" = 'regenerate' then 0
+      when "Report Status" = 'submission_pending' then 0
+      end as "New CHO" -- finish calculating monthly avgs. 
+      --100% = 3
+      -->85% = 2
+      -->75% = 1
+      --<75% = 0
      
   FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
   Join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report
@@ -47,7 +57,7 @@ SELECT
   join "PROD"."APPDB"."STORES" as tsd_status
   on "Store ID" = tsd_status.id
   where 
-  bitand(tsd_status.bit_flag,8192)=8192 --TSD is Active
+  bitand(tsd_status.bit_flag,8192)=8192 --replace with Report status = Live & Customer status = Active
   and tsd_status.last_tx_date_time is not null
   and "Week-Ending Date" between (dateadd('day',-34,getdate())) and (dateadd('day',-7,getdate())) --exclude week prior from current week, ensure 4 weeks of IRI & MSA files for each store
-  order by "Week-Ending Date" asc
+  order by "Store ID" asc

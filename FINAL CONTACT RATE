@@ -1,36 +1,23 @@
-select
-distinct(sfdc_account.store_id__c) as "Store ID",
-sfdc_account.cases_per_month__c as "Cases Per Month",
+select 
+distinct(sfdc_account.store_id__c) as "Stores",
+count(sfdc_account.id) as "Count",
 case
     when sfdc_account.customer_health_score__c is not null then sfdc_account.customer_health_score__c
     when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO",
-max(case_type.case_record_type) as "Record Type",
-count(case_type.case_record_type) as "Record Count",
-sfdc_account.createddate as "Account Created Date",
-datediff(month,sfdc_account.createddate,getdate()) as "Months Active",
 case
-    when "Months Active" = 0 then "Record Count"
-    when "Months Active" > 0 then cast("Record Count"/"Months Active" as number (10,2)) end as "Avg Cases Per Month",
-
-case
-    when "Avg Cases Per Month" <= '1' then 3
-    when "Avg Cases Per Month" = '2' then 2
-    when "Avg Cases Per Month" = '3' then 1
-    when "Avg Cases Per Month" >= '4' then 0
+    when "Count" <= '1' then 3
+    when "Count" = '2' then 2
+    when "Count" = '3' then 1
+    when "Count" >= '4' then 0
     end as "New CHO"
-
 
 from
 "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
-    join "PROD"."SALESFORCE"."CASE" as sfdc_case
-        on sfdc_account.store_id__c = sfdc_case.store_id__c
-    join "ANALYTICS"."PRODUCTION"."DIM_CASES" as case_type
-        on sfdc_account.id = case_type.sfdc_account_id
+    join "PROD"."SALESFORCE"."CASE" sfdc_case
+        on sfdc_account.id = sfdc_case.accountid
+   
 where
---"Current CHO" is not null        
-case_type.case_record_type = 'Tech Support'
-and "Store ID" not in ('12345678','22334455')
-group by "Store ID","Cases Per Month","Current CHO","Account Created Date"
---and "Case Created Date" >= dateadd('Day',-30,getdate()) --may want to leave off date filter for larger array of running avg
-order by "Store ID" desc
+sfdc_case.recordtypeid = '0122M000001cuS8QAI' and
+sfdc_case.createddate >= dateadd('day',-30,getdate())
+group by "Stores","Current CHO"
       

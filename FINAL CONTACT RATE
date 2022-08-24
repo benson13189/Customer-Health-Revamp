@@ -1,9 +1,7 @@
-select 
-distinct(sfdc_account.store_id__c) as "Stores",
-count(sfdc_account.id) as "Count",
-case
-    when sfdc_account.customer_health_score__c is not null then sfdc_account.customer_health_score__c
-    when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO",
+select
+"Store ID",
+sum(last_month_count) as "Count",
+"Current CHO",
 case
     when "Count" <= '1' then 3
     when "Count" = '2' then 2
@@ -11,13 +9,29 @@ case
     when "Count" >= '4' then 0
     end as "New CHO"
 
+
+from
+(select 
+distinct(sfdc_account.store_id__c) as "Store ID",
+sfdc_case.id as "Case ID",
+sfdc_case.createddate as "Created Date",
+case
+    when sfdc_account.customer_health_score__c is not null then sfdc_account.customer_health_score__c
+    when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as "Current CHO",
+case
+    when sfdc_case.createddate >= dateadd('day',-30,getdate()) then 1
+    when sfdc_case.createddate <= dateadd('day',-30,getdate()) then 0
+    end as last_month_count
+
 from
 "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
     join "PROD"."SALESFORCE"."CASE" sfdc_case
         on sfdc_account.id = sfdc_case.accountid
    
 where
-sfdc_case.recordtypeid = '0122M000001cuS8QAI' and
-sfdc_case.createddate >= dateadd('day',-30,getdate())
-group by "Stores","Current CHO"
+sfdc_case.recordtypeid in ('0122M000001cuS8QAI','0122M000000vhnfQAA')--Tech Support case type
+and sfdc_account.isparent__c = 'FALSE'
+order by sfdc_case.createddate desc)
+group by "Store ID","Current CHO"
+order by "Count" desc
       

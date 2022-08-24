@@ -5,10 +5,8 @@ count(possible_multipack_quantities) as "MP Eligible",
 cast(("MP Redeemed"/"MP Eligible") * 100 as decimal(10,2)) as "Percent MP Eligible Redeemed",
 sfdc_account.customer_health_score__c as "Current CHO",
 case
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" >= '50' then 3
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '35' and '49' then 2
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '15' and '34' then 1
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" <= '14' then 0
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" >= '50' then 1
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" <= '49.99' then 0
     when bitand(tsd_status.bit_flag,8192)<>8192 then 0 
     end as "New CHO",
 tsd_status.bit_flag 

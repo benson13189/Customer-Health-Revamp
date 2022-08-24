@@ -1,15 +1,27 @@
 select 
-store_number,
+store_number as "Store ID",
 sum(case when multipack_indicator = 'Y' then 1 else 0 end) as "MP Redeemed",
 count(possible_multipack_quantities) as "MP Eligible",
-cast(("MP Redeemed"/"MP Eligible") * 100 as decimal(10,2)) as "Percent MP Eligible Redeemed",
+cast(("MP Redeemed"/"MP Eligible") * 100 as decimal(10,0)) as "Percent MP Eligible Redeemed",
+case
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '90' and '100' then 90
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '80' and '89' then 80
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '70' and '79' then 70
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '60' and '69' then 60
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '50' and '59' then 50
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '40' and '49' then 40
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '30' and '39' then 30
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '20' and '29' then 20
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '10' and '19' then 10
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '0' and '9' then 0
+    when bitand(tsd_status.bit_flag,8192)<>8192 then 0 
+    end as "MP/MC Discounts Given Percentile",
 sfdc_account.customer_health_score__c as "Current CHO",
 case
     when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" >= '50' then 1
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" <= '49.99' then 0
+    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" <= '49' then 0
     when bitand(tsd_status.bit_flag,8192)<>8192 then 0 
-    end as "New CHO",
-tsd_status.bit_flag 
+    end as "New CHO"
 from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_DASHBOARD_REPORT_RAW_DATA"
     join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
         on store_number = sfdc_account.store_id__c

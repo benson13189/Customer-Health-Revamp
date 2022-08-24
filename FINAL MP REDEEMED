@@ -1,33 +1,38 @@
 select 
 store_number as "Store ID",
 sum(case when multipack_indicator = 'Y' then 1 else 0 end) as "MP Redeemed",
-count(possible_multipack_quantities) as "MP Eligible",
-cast(("MP Redeemed"/"MP Eligible") * 100 as decimal(10,0)) as "Percent MP Eligible Redeemed",
+sum(case when possible_multipack_quantities is not null then 1 else 0 end) as "MP Eligible",
+sum(case when possible_multipack_quantities is null then 1 else 0 end) as "MP Ineligible",
 case
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '90' and '100' then 90
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '80' and '89' then 80
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '70' and '79' then 70
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '60' and '69' then 60
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '50' and '59' then 50
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '40' and '49' then 40
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '30' and '39' then 30
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '20' and '29' then 20
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '10' and '19' then 10
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" between '0' and '9' then 0
-    when bitand(tsd_status.bit_flag,8192)<>8192 then 0 
+    when "MP Eligible" > '0' then cast(("MP Redeemed"/"MP Eligible") * 100 as decimal(10,0))
+    when "MP Eligible" = '0' then 0 
+    end as "Percent MP Eligible Redeemed",
+case
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '90' and '100' then 90
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '80' and '89' then 80
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '70' and '79' then 70
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '60' and '69' then 60
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '50' and '59' then 50
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '40' and '49' then 40
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '30' and '39' then 30
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '20' and '29' then 20
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '10' and '19' then 10
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" between '0' and '9' then 0
+    when (bitand(tsd_status.bit_flag,8192)<>8192 and bitand(tsd_status.bit_flag,1024)<>1024) then 0 
     end as "MP/MC Discounts Given Percentile",
 sfdc_account.customer_health_score__c as "Current CHO",
 case
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" >= '50' then 1
-    when bitand(tsd_status.bit_flag,8192)=8192 and "Percent MP Eligible Redeemed" <= '49' then 0
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" >= '50' then 1
+    when (bitand(tsd_status.bit_flag,8192)=8192 or bitand(tsd_status.bit_flag,9216)=9216) and "Percent MP Eligible Redeemed" <= '49' then 0
     when bitand(tsd_status.bit_flag,8192)<>8192 then 0 
-    end as "New CHO"
+    end as "New CHO",
+    tsd_status.bit_flag
 from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_DASHBOARD_REPORT_RAW_DATA"
     join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
         on store_number = sfdc_account.store_id__c
     join "PROD"."APPDB"."STORES" as tsd_status
         on store_number = tsd_status.id
 where quantity_sold > '1' and
-possible_multipack_quantities is not null and
-tsd_status.last_tx_date_time is not null
+tsd_status.last_tx_date_time is not null 
 group by store_number,"Current CHO",tsd_status.bit_flag
+

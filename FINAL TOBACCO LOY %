@@ -1,11 +1,34 @@
 select
-stores,
+stores as "Store ID",
 total_eligible as "Total Eligible Transactions",
 eligible_with_discount as "Count Eligible with Discount",
+cast(total_discount_amount as number(10,2)) as "Total Discounts Given",
 case
     when "Total Eligible Transactions" > '0' then cast((eligible_with_discount / total_eligible) * 100 as number (10,0))
     when "Total Eligible Transactions" = '0' then 0
     end as "Percent Eligible with Discount",
+case
+    when "Total Eligible Transactions" > '0' then cast((eligible_no_discount / total_eligible) * 100 as number (10,0))
+    when "Total Eligible Transactions" = '0' then 0
+    end as "Percent Eligible no Discount",
+case
+    when "Percent Eligible with Discount" > '0' then cast((("Total Discounts Given" * "Percent Eligible no Discount")/"Percent Eligible with Discount") as number(10,2))
+    when "Percent Eligible with Discount" = '0' then cast(avg(total_discount_amount) as number(10,2))
+    end as "Missed Discount Amount",
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '90' and '100' then 90
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '80' and '89' then 80
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '70' and '79' then 70
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '60' and '69' then 60
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '50' and '59' then 50
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '40' and '49' then 40
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '30' and '39' then 30
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '20' and '29' then 20
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '10' and '19' then 10
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '0' and '9' then 0
+    when bitand(bit_flag,1024)<>1024 then 0 
+    Else 0 
+    end as "Discounts Given Percentile",
 customer_health_score as "Current CHO",
 case
     when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" >= '50' then 3
@@ -13,7 +36,8 @@ case
     when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '15' and '34' then 1
     when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" <= '14' then 0
     when bitand(bit_flag,1024)<>1024 then 0
-    end as "New CHO"
+    end as "New CHO",
+bit_flag
 
 from
 (Select 
@@ -24,6 +48,8 @@ sum(case
     when eligibility_flag = 'TRUE' and manufacturer_discount_three_amount is null then 1 else 0 end) as eligible_no_discount,
 sum(case
     when eligibility_flag = 'TRUE' then 1 else 0 end) as total_eligible,
+sum(case
+    when eligibility_flag = 'TRUE' and quantity_sold >= '1' then manufacturer_discount_three_amount else 0 end) as total_discount_amount,
 sfdc_account.customer_health_score__c as customer_health_score,
 engage_status.bit_flag as bit_flag
 
@@ -37,4 +63,14 @@ where --what timeframe do we want for tobacco loyalty??
       engage_status.last_tx_date_time is not null
 group by stores,customer_health_score,engage_status.bit_flag
 )
-order by "Percent Eligible with Discount" desc
+group by
+"Store ID",
+"Total Eligible Transactions",
+"Count Eligible with Discount",
+"Total Discounts Given",
+"Percent Eligible with Discount",
+"Percent Eligible no Discount",
+"Discounts Given Percentile",
+"Current CHO",
+"New CHO",
+bit_flag

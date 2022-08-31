@@ -1,0 +1,28 @@
+select 
+distinct(sfdc_account.store_id__c) as store_id, --distinct store IDs to get a sum for cases at the store-level
+case
+    when sfdc_account.customer_health_score__c is not null then sfdc_account.customer_health_score__c
+    when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as current_cho, --pulling in current customer health output from sfdc account
+sum(case
+    when sfdc_case.createddate >= dateadd('day',-30,getdate()) then 1
+    when sfdc_case.createddate <= dateadd('day',-30,getdate()) then 0
+    end) as "Case Count", --case statement to count cases created within the previous 30 days, as we want this new Customer Health Output to contain relatively recent data around store performance
+case
+    when "Case Count" <= '1' then 3
+    when "Case Count" = '2' then 2
+    when "Case Count" = '3' then 1
+    when "Case Count" >= '4' then 0
+    end as "New CHO" --case statement to assign new values based upon proposed changes to calculate a new customer health score on a scale of 5 down to 0 based on number of cases in a rolling 30-day window
+
+
+from
+"PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+    join "PROD"."SALESFORCE"."CASE" sfdc_case
+        on sfdc_account.id = sfdc_case.accountid --joining sfdc accounts and case tables on sfdc account id
+   
+where
+sfdc_case.recordtypeid in ('0122M000001cuS8QAI')--looking only for Tech Support case record types
+and sfdc_account.isparent__c = 'FALSE' --filtering out parent accounts, only want to look for child accounts
+and sfdc_case.direction__c = 'Inbound' --filtering for only inbound support cases
+and store_id is not null --filtering results that are not associated with a store id
+group by store_id,current_cho

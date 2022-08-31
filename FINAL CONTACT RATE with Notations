@@ -1,3 +1,6 @@
+--the calculation departs from the method we use to calculate contact rate for WBR, which is a % of unique contacts/total current store counts, however, due to current data limitations with NVM tables, and lack of current heap integration with snowflake
+--the only way we can reliably calculate a contact rate given those limitations is to look for inbound technical support cases in a rolling 30-day window
+
 select 
 distinct(sfdc_account.store_id__c) as store_id, --distinct store IDs to get a sum for cases at the store-level
 case
@@ -26,3 +29,5 @@ and sfdc_account.isparent__c = 'FALSE' --filtering out parent accounts, only wan
 and sfdc_case.direction__c = 'Inbound' --filtering for only inbound support cases
 and store_id is not null --filtering results that are not associated with a store id
 group by store_id,current_cho
+
+

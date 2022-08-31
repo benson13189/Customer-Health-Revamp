@@ -1,71 +1,46 @@
+with oos as --defining cte and using original query for OOS calculations
+(select
+        to_date(ss.date_of_refesh) as date_of_refesh, --converts refesh (date snapshot is taken) to date as assigns alias
+        ss.id as store_id,
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 1
+            else 0
+        end as in_sync, --case statement to count last tx date from store when last tx date is less or equal to 3 days prior to refesh date, classified as 'in sync'
+        case
+            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 0
+            else 1
+        end as out_of_sync, --case statement to count last tx date from store when last tx date is more than 3 days prior to refesh date, classified as 'out of sync'
+        (in_sync + out_of_sync) as snap_count, --calculates the total in sync and out of sync snapshots for each store
+        (out_of_sync / snap_count) * 100 as avg_time_oos, --calculates the number of instances a store is oos divided by the number of snapshots we have (x100) to get an out of sync %/rate of a given store's snapshots
+        case when a.customer_health_score__c is not null then a.CUSTOMER_HEALTH_SCORE__C 
+             when a.customer_health_score__c is null then 'No Current CHO' end as current_cho --pulls in the current customer health score (for comparison to new score) from the sfdc account
+        
+        from "SHARED"."SNAPSHOTS"."STORES_TABLE_SNAPSHOT" ss
+            left join "PROD"."SALESFORCE"."ACCOUNT" a
+             on store_id = a.store_id__c --joining the snapshots table to the accounts table on store ids
+        
+        where 
+                  a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' --filter for stores with at least one active Closed-Won TSD opportunity
+              and date_of_refesh > date_of_first_transaction__c --ensures that date of the snapshot is at least post-installation
+              and date_of_refesh >= dateadd('day',-30,getdate()) --filtering to only look for results within the previous 30 days, as we want this new Customer Health Output to contain relatively recent data around store performance
+              and isparent__c = 'FALSE' --filtering out any inapplicable parent accounts             
+                        
+)
+
 select
-"Store ID",
-"Days in Sync",
-"Days OOS",
-"Avg % OOS",
-"Current CHO",
+distinct(oos.store_id) as "Store ID", --using distinct store IDs so we can add together results below for calculations and want to avoid having on SID expressed across multiple rows with different snapshot dates
+sum(oos.in_sync) as "Days in Sync", --adding together the total snapshots where the store is OOS
+sum(oos.out_of_sync) as "Days OOS", --adding total snapshots where the store is in-sync
+cast(avg(oos.avg_time_oos) as number(10,2)) as "Avg % OOS", --getting an average % (w/2 decimals) that a store is out of sync over the 30 day timeframe
+oos.current_cho as "Current CHO", --pulling in the current customer health output from the cte
 case
     when "Days OOS" = '0' then 5
     when "Days OOS" between '1' and '2' then 4
     when "Days OOS" between '3' and '4' then 3
     when "Days OOS" between '5' and '6' then 2
     when "Days OOS" between '7' and '8' then 1
-    else 0 end as "New CHO"
+    else 0 end as "New CHO" --case statement to assign new values based upon proposed changes to calculate a new customer health score on a scale of 5 down to 0
 
+from oos
 
-from
-(select
-distinct(store_id) as "Store ID",
-sum(in_sync) as "Days in Sync",
-sum(out_of_sync) as "Days OOS",
-cast(avg(avg_time_oos) as number(10,2)) as "Avg % OOS",
-current_cho as "Current CHO"
-
-
-
-
-from
-(select
-        to_date(ss.date_of_refesh) as date_of_update,
-        ss.id as store_id,
-        case
-            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 1
-            else 0
-        end as in_sync,
-        case
-            when ss.last_tx_date_time >= dateadd('hour', -72, ss.date_of_refesh) then 0
-            else 1
-        end as out_of_sync,
-        in_sync + out_of_sync as snap_count,
-        (out_of_sync / snap_count) * 100 as avg_time_oos,
-        datediff('hour', ss.last_tx_date_time, ss.date_of_refesh) / 24 as age,
-        case
-            when age <= 3 then 'not oos'
-            when age > 3
-            and age <= 30 then '3 <> 30'
-            when age > 30
-            and age <= 90 then '30 <> 90'
-            when age > 90
-            and age <= 180 then '90 <> 180'
-            else '180+'
-        end as age_bucket,
-        datediff('day',date_of_first_transaction__c,getdate()) as account_age,
-        datediff('day','2021-09-29',getdate()) as earliest_snap,
-        case when a.customer_health_score__c is not null then a.CUSTOMER_HEALTH_SCORE__C 
-             when a.customer_health_score__c is null then 'No Current CHO' end as current_cho
-        //datediff('day',first_loyalty_host_ping__c,getdate()) as days_since_engage_install
-        
-        
-        from "SHARED"."SNAPSHOTS"."STORES_TABLE_SNAPSHOT" ss
-            left join "PROD"."SALESFORCE"."ACCOUNT" a
-             on store_id = a.store_id__c
-        
-        
-        where 
-              a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' and	
-              date_of_update > date_of_first_transaction__c and
-              date_of_update >= dateadd('day',-30,getdate()) AND
-              isparent__c = 'FALSE'
-              
-)
-group by "Store ID","Current CHO")
+group by "Store ID","Current CHO"

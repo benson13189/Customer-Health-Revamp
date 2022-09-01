@@ -1,0 +1,58 @@
+Select 
+store_number as "Store ID",
+sum(case
+    when eligibility_flag = 'TRUE' and manufacturer_discount_three_amount > '0' then 1 else 0 end) as "Eligible with Discount", --adding total tx's where LFP eligibility flag is true and LFP discount is at least > 0
+sum(case
+    when eligibility_flag = 'TRUE' and (manufacturer_discount_three_amount = '0' or manufacturer_discount_three_amount is null) then 1 else 0 end) as "Eligible no Discount", --adding total tx's where LFP eligibility flag is true and LFP discount is 0 or null
+sum(case
+    when eligibility_flag = 'TRUE' then 1 else 0 end) as "Total Eligible TX's", --total LFP eligible tx's
+case
+    when "Total Eligible TX's" > '0' then cast(("Eligible with Discount" / "Total Eligible TX's") * 100 as number (10,0))
+    when "Total Eligible TX's" = '0' then 0
+    end as "Percent Eligible with Discount",--case statement to calculate percentage eligible tx's with LFP discount given
+case
+    when "Total Eligible TX's" > '0' then cast(("Eligible no Discount" / "Total Eligible TX's") * 100 as number (10,0))
+    when "Total Eligible TX's" = '0' then 0
+    end as "Percent Eligible no Discount", -- case statement to calculate percentage eligible tx's without LFP discount given
+cast(sum(case
+    when eligibility_flag = 'TRUE' and quantity_sold >= '1' then manufacturer_discount_three_amount else 0 end) as number(10,2)) as "Total Discounts Given",--total amount of LFP discounts given pulled from altria loyalty report data table
+case
+    when "Eligible with Discount" > '0' then cast((("Total Discounts Given"/"Eligible with Discount") * "Eligible no Discount") as number(10,2))
+    when "Eligible with Discount" = '0' then cast(("Total Discounts Given") as number(10,2))
+    end as "Missed Discount Amount", --case statement to calculate the estimated missed discount $ amount
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '90' and '100' then 90
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '80' and '89' then 80
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '70' and '79' then 70
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '60' and '69' then 60
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '50' and '59' then 50
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '40' and '49' then 40
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '30' and '39' then 30
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '20' and '29' then 20
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '10' and '19' then 10
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '0' and '9' then 0
+    when bitand(bit_flag,1024)<>1024 then 0 
+    Else 0 
+    end as "Discounts Given Percentile",--case statement to bucket stores with active engage by percentiles of eligible tx's with a discount given
+sfdc_account.customer_health_score__c as "Current CHO", --current customer health score from accounts table
+case
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" >= '50' then 3
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '35' and '49' then 2
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" between '15' and '34' then 1
+    when bitand(bit_flag,1024)=1024 and "Percent Eligible with Discount" <= '14' then 0
+    when bitand(bit_flag,1024)<>1024 then 0 
+    end as "New CHO" --case statement bucketing active engage stores by percent of eligible tx's given w/LFP discount to calculate new customer health output
+
+
+from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_LOYALTY_REPORT_DATA_TABLE"
+    join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+        on store_number = sfdc_account.store_id__c
+    join "PROD"."APPDB"."STORES" as engage_status
+        on store_number = engage_status.id
+where
+transaction_datetime >= (dateadd('day',-30,getdate())) and --limiting query results to eligible tx's that occured within the last 30 days
+bitand(engage_status.bit_flag,1024)=1024 and --limiting query results to stores that have active engage
+engage_status.last_tx_date_time is not null --limiting to stores that actually have last tx timestamps
+group by 
+"Store ID","Current CHO",engage_status.bit_flag
+order by "Store ID" asc

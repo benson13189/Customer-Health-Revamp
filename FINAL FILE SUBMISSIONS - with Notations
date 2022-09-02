@@ -1,0 +1,72 @@
+with files as
+(SELECT 
+  report_status.report_account_id as report_id,
+  report_status.STORE_CHAIN_ID as chain_id,
+  report_status.store_id as store_id,
+  case when bitand(tsd_status.bit_flag,8192)=8192 and tsd_status.last_tx_date_time is not null then 'tsd_active'
+       else 'tsd inactive' end as tsd_status, --case statement to filter for only active stores by looking for tsd-active bitflag and last tx stamp
+  cast(report_status.PERIOD_END_AT as date) AS week_ending_date,
+    case webapi_report.report_type
+      WHEN 0 THEN 'IRI'
+      WHEN 4 THEN 'MSA'
+      WHEN 1 THEN '???'
+    Else 'NA'
+    END AS report_type, --statement to define whether report is MSA or IRI
+case webapi_report.status
+      WHEN 0 THEN 'not_ready'
+      WHEN 1 THEN 'ready_to_submit' 
+      WHEN 2 THEN 'generation_pending' 
+      WHEN 3 THEN 'submitted'
+      WHEN 4 THEN 'generation_failed' 
+      WHEN 5 THEN 'submission_failed' 
+      WHEN 6 THEN 'regenerate' 
+      WHEN 7 THEN 'force_submitted' 
+      WHEN 8 THEN 'submission_pending' 
+    Else 'NA'
+    END as report_status, --case status to define whether stores have submitted reports or not
+case when report_status = 'force_submitted' then 1
+     when report_status = 'submitted' then 1
+     when report_status = 'not_ready' then 0
+     when report_status = 'ready_to_submit' then 0
+     when report_status = 'generation_pending' then 0
+     when report_status = 'sumbission_failed' then 0
+     when report_status = 'regenerate' then 0
+     when report_status = 'submission_pending' then 0
+     end as new_cho_input, --case status to count instances of a submitted report
+case when sfdc_account.customer_health_score__c is not null then sfdc_account.CUSTOMER_HEALTH_SCORE__C 
+     when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as current_cho --case status to pull in current customer health score from sfdc account
+     
+FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
+ join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report
+  ON webapi_report.request_id = report_status.request_id
+ join "PC_STITCH_DB"."STITCH_R1000"."REPORT_ACCOUNTS" as accounts
+  ON report_status.report_account_id = accounts.id
+  and webapi_report.report_type IN (0,4)
+ join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
+  on report_status.store_id = sfdc_account.store_id__c
+ join "PROD"."APPDB"."STORES" as tsd_status
+  on report_status.store_id = tsd_status.id
+ join "PROD"."APPDB"."REPORT_ACCOUNT_STORES" as customer_status
+  on report_status.store_id = customer_status.store_id
+where 
+ bitand(tsd_status.bit_flag,8192)=8192 and--replace with Report status = Live & Customer status = Active
+ bitand(customer_status.bit_flag,1)=0 and
+ bitand(accounts.bit_flag,1)=0 and
+ tsd_status.last_tx_date_time is not null and
+ week_ending_date between (dateadd('day',-34,getdate())) and (dateadd('day',-7,getdate())) --exclude week prior from current week, ensure 4 weeks of IRI & MSA files for each store
+  )
+  
+select
+distinct(store_id) as "Store ID",
+count(new_cho_input) as "Report Count",
+sum(new_cho_input) as "Reports Submitted",
+cast(("Reports Submitted" / "Report Count") as number(10,2)) as "Percent Submitted", --calculating percent submitted over total reports 
+current_cho as "Current CHO",
+case
+    when "Percent Submitted" = '1.00' then 3
+    when "Percent Submitted" between '.85' and '.99' then 2
+    when "Percent Submitted" between '.76' and '.84' then 1
+    when "Percent Submitted" <= '.75' then 0
+    end as "New CHO" --case statement to calculate new customer health output
+from files
+group by "Store ID","Current CHO"

@@ -32,27 +32,23 @@ case when report_status = 'force_submitted' then 1
      when report_status = 'sumbission_failed' then 0
      when report_status = 'regenerate' then 0
      when report_status = 'submission_pending' then 0
-     end as new_cho_input, --case status to count instances of a submitted report
-case when sfdc_account.customer_health_score__c is not null then sfdc_account.CUSTOMER_HEALTH_SCORE__C 
-     when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as current_cho --case status to pull in current customer health score from sfdc account
-     
-FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status
- join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report
+     end as new_cho_input --case status to count instances of a submitted report
+    
+FROM PROD.TSD.STORE_STATUS_PER_PERIOD as report_status --table for actual report statuses
+ join "PC_STITCH_DB"."STITCH_R1000"."REPORTS" as webapi_report --This table is joined to pull in IRI or MSA report type
   ON webapi_report.request_id = report_status.request_id
- join "PC_STITCH_DB"."STITCH_R1000"."REPORT_ACCOUNTS" as accounts
+ join "PC_STITCH_DB"."STITCH_R1000"."REPORT_ACCOUNTS" as accounts --table to join in bitflag for Live report status
   ON report_status.report_account_id = accounts.id
   and webapi_report.report_type IN (0,4)
- join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
-  on report_status.store_id = sfdc_account.store_id__c
- join "PROD"."APPDB"."STORES" as tsd_status
+ join "PROD"."APPDB"."STORES" as tsd_status --table to join in bitflag for TSD is Active status
   on report_status.store_id = tsd_status.id
- join "PROD"."APPDB"."REPORT_ACCOUNT_STORES" as customer_status
+ join "PROD"."APPDB"."REPORT_ACCOUNT_STORES" as customer_status --table to join in customer status = Active
   on report_status.store_id = customer_status.store_id
 where 
- bitand(tsd_status.bit_flag,8192)=8192 and--replace with Report status = Live & Customer status = Active
- bitand(customer_status.bit_flag,1)=0 and
- bitand(accounts.bit_flag,1)=0 and
- tsd_status.last_tx_date_time is not null and
+ bitand(tsd_status.bit_flag,8192)=8192 and--TSD Status = Active
+ bitand(customer_status.bit_flag,1)=0 and -- customer status is active
+ bitand(accounts.bit_flag,1)=0 and -- report status = Live
+ tsd_status.last_tx_date_time is not null and --have a last tx date for TSD
  week_ending_date between (dateadd('day',-34,getdate())) and (dateadd('day',-7,getdate())) --exclude week prior from current week, ensure 4 weeks of IRI & MSA files for each store
   )
   
@@ -61,7 +57,6 @@ distinct(store_id) as "Store ID",
 count(new_cho_input) as "Report Count",
 sum(new_cho_input) as "Reports Submitted",
 cast(("Reports Submitted" / "Report Count") as number(10,2)) as "Percent Submitted", --calculating percent submitted over total reports 
-current_cho as "Current CHO",
 case
     when "Percent Submitted" = '1.00' then 3
     when "Percent Submitted" between '.85' and '.99' then 2
@@ -69,4 +64,5 @@ case
     when "Percent Submitted" <= '.75' then 0
     end as "New CHO" --case statement to calculate new customer health output
 from files
-group by "Store ID","Current CHO"
+group by "Store ID"
+

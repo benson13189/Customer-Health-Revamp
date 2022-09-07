@@ -11,16 +11,17 @@ with oos as --defining cte and using original query for OOS calculations
             else 1
         end as out_of_sync, --case statement to count last tx date from store when last tx date is more than 3 days prior to refesh date, classified as 'out of sync'
         (in_sync + out_of_sync) as snap_count, --calculates the total in sync and out of sync snapshots for each store
-        (out_of_sync / snap_count) * 100 as avg_time_oos, --calculates the number of instances a store is oos divided by the number of snapshots we have (x100) to get an out of sync %/rate of a given store's snapshots
-        case when a.customer_health_score__c is not null then a.CUSTOMER_HEALTH_SCORE__C 
-             when a.customer_health_score__c is null then 'No Current CHO' end as current_cho --pulls in the current customer health score (for comparison to new score) from the sfdc account
+        (out_of_sync / snap_count) * 100 as avg_time_oos --calculates the number of instances a store is oos divided by the number of snapshots we have (x100) to get an out of sync %/rate of a given store's snapshots
         
         from "SHARED"."SNAPSHOTS"."STORES_TABLE_SNAPSHOT" ss
             left join "PROD"."SALESFORCE"."ACCOUNT" a
              on store_id = a.store_id__c --joining the snapshots table to the accounts table on store ids
+            left join "PROD"."APPDB"."STORES" b --joining appdb stores table to pull in TSD 
+            on store_id = b.id
         
         where 
-                  a.NUMBER_OF_CW_TSD_OPPORTUNITIES__C != '0' --filter for stores with at least one active Closed-Won TSD opportunity
+                  
+                  bitand(b.bit_flag,8192)=8192 --tsd status is active
               and date_of_refesh > date_of_first_transaction__c --ensures that date of the snapshot is at least post-installation
               and date_of_refesh >= dateadd('day',-30,getdate()) --filtering to only look for results within the previous 30 days, as we want this new Customer Health Output to contain relatively recent data around store performance
               and isparent__c = 'FALSE' --filtering out any inapplicable parent accounts             
@@ -32,7 +33,6 @@ distinct(oos.store_id) as "Store ID", --using distinct store IDs so we can add t
 sum(oos.in_sync) as "Days in Sync", --adding together the total snapshots where the store is OOS
 sum(oos.out_of_sync) as "Days OOS", --adding total snapshots where the store is in-sync
 cast(avg(oos.avg_time_oos) as number(10,2)) as "Avg % OOS", --getting an average % (w/2 decimals) that a store is out of sync over the 30 day timeframe
-oos.current_cho as "Current CHO", --pulling in the current customer health output from the cte
 case
     when "Days OOS" = '0' then 5
     when "Days OOS" between '1' and '2' then 4
@@ -43,4 +43,4 @@ case
 
 from oos
 
-group by "Store ID","Current CHO"
+group by "Store ID"

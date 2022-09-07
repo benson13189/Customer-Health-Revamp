@@ -44,8 +44,6 @@ case
 
 
 from "PROD"."RETAILER_PERFORMANCE"."ALTRIA_LOYALTY_REPORT_DATA_TABLE"
-    join "PROD"."SALESFORCE"."ACCOUNT" as sfdc_account
-        on store_number = sfdc_account.store_id__c
     join "PROD"."APPDB"."STORES" as engage_status
         on store_number = engage_status.id
 where
@@ -55,3 +53,4 @@ engage_status.engage_first_ping_at is not null --limiting to stores that actuall
 group by 
 "Store ID",engage_status.bit_flag
 order by "Store ID" asc
+

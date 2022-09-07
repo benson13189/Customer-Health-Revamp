@@ -1,0 +1,15 @@
+select 
+store_id,
+enrolled_in_all_brand_programs__c as enrolled, --flag is true if store is enrolled in all brand programs, false if enrolled in no programs, or a la carte enrollement
+sum(case when first_reward_given_at is not null then 1 else 0 end) as discount_given, --count of first discount given by program
+case
+    when enrolled = 'TRUE' and discount_given > '0' then 3 --enrolled in all programs and discounts given
+    when enrolled = 'FALSE' and discount_given > '0' then 2 --enrolled in some programs a la carte with discounts given
+    when enrolled = 'TRUE' and discount_given = '0' then 1 --enrolled in all programs but no discount given
+    when enrolled = 'FALSE' and discount_given = '0' then 0 --enrolled in some programs (or none) and no discounts give
+    end as "New CHO" --case statement to assign new customer health output
+from
+"PROD"."APPDB"."ENGAGE_STORE_ENROLLMENTS" --store enrollment table
+ join "PROD"."SALESFORCE"."ACCOUNT" b --joining account table
+ on store_id = b.store_id__C
+group by store_id,enrolled;

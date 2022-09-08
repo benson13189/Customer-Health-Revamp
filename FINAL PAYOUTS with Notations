@@ -3,12 +3,13 @@ distinct(a.store_id__c) as "Store ID",
 a.stripe_account__c as "Active Stripe Account", --has the stripe account been set up? Null if not.
 sum(s.amount_in_dollars) as "Amounts Transferred", --has any amount been transferred?
 case
-    when "Active Stripe Account" is not null and "Amounts Transferred" > '1' then 1 --giving 1 score if stripe account has been setup and transfer of greater than $1 has occurred 
-    when "Active Stripe Account" is not null and "Amounts Transferred" <= '1' then 0 --giving 0 score if stripe account has been setup and less than $1 has been transferred
+    when "Active Stripe Account" is not null and "Amounts Transferred" > '1' and available_at >= dateadd('month',-6,getdate()) then 1 --giving 1 score if stripe account has been setup and transfer of greater than $1 has occurred within the last 6 months
+    when "Active Stripe Account" is not null and "Amounts Transferred" > '1' and available_at <= dateadd('month',-6,getdate()) then 0 --0 score if account is active but no transfers made within the last 6 months
+    when "Active Stripe Account" is not null and "Amounts Transferred" <= '1' then 0 --giving 0 scire if stripe account has been setup and less than $1 has been transferred
     when "Active Stripe Account" is null then '0' --0 score if no active stripe account set up
     end as "New CHO"
 from "PROD"."SALESFORCE"."ACCOUNT" a
     join "ANALYTICS"."PRODUCTION"."FCT_STRIPE_TRANSFERS" s
         on a.chain_id__c = s.chain_id --joining accounts table to analytics stripe transfer table
 where "Store ID" is not null
-group by "Store ID","Active Stripe Account"
+group by "Store ID","Active Stripe Account",available_at

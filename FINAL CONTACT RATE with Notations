@@ -3,9 +3,6 @@
 
 select 
 distinct(sfdc_account.store_id__c) as "Store ID", --distinct store IDs to get a sum for cases at the store-level
-case
-    when sfdc_account.customer_health_score__c is not null then sfdc_account.customer_health_score__c
-    when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as current_cho, --pulling in current customer health output from sfdc account
 sum(case
     when sfdc_case.createddate >= dateadd('day',-30,getdate()) then 1
     when sfdc_case.createddate <= dateadd('day',-30,getdate()) then 0

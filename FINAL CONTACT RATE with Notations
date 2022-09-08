@@ -2,7 +2,7 @@
 --the only way we can reliably calculate a contact rate given those limitations is to look for inbound technical support cases in a rolling 30-day window
 
 select 
-distinct(sfdc_account.store_id__c) as store_id, --distinct store IDs to get a sum for cases at the store-level
+distinct(sfdc_account.store_id__c) as "Store ID", --distinct store IDs to get a sum for cases at the store-level
 case
     when sfdc_account.customer_health_score__c is not null then sfdc_account.customer_health_score__c
     when sfdc_account.customer_health_score__c is null then 'No Current CHO' end as current_cho, --pulling in current customer health output from sfdc account
@@ -27,7 +27,7 @@ where
 sfdc_case.recordtypeid in ('0122M000001cuS8QAI')--looking only for Tech Support case record types
 and sfdc_account.isparent__c = 'FALSE' --filtering out parent accounts, only want to look for child accounts
 and sfdc_case.direction__c = 'Inbound' --filtering for only inbound support cases
-and store_id is not null --filtering results that are not associated with a store id
-group by store_id,current_cho
+and "Store ID" is not null --filtering results that are not associated with a store id
+group by "Store ID",current_cho
 
 
